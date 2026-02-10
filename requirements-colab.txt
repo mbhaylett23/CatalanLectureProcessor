@@ -1,0 +1,3 @@
+# Additional GPU-specific packages for Google Colab
+# (requirements.txt already includes torch for CPU; Colab installs GPU torch automatically)
+accelerate>=0.30.0

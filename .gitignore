@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+
+# Audio files (large)
+*.m4a
+*.mp3
+*.wav
+*.ogg
+*.webm
+*.flac
+
+# Output files
+*.pptx
+output/
+
+# Keep requirements files
+!requirements*.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+nul
+
+# IDE
+.vscode/
+.idea/
+
+# Environment / secrets
+.env

@@ -1,0 +1,28 @@
+# Core transcription (CPU)
+faster-whisper>=1.1.0
+
+# PyTorch (CPU-only, needed for NLLB translation model)
+# Install with: pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.1.0
+
+# Transformers (shared by transcriber GPU path, translator, etc.)
+transformers>=4.40.0
+sentencepiece>=0.2.0
+protobuf>=4.25.0
+
+# LLM backends (optional - install the ones you need)
+google-generativeai>=0.8.0
+huggingface-hub>=0.25.0
+requests>=2.31.0
+
+# PowerPoint generation
+python-pptx>=1.0.0
+
+# Web UI
+gradio>=4.40.0
+
+# Audio processing
+pydub>=0.25.1
+
+# Progress
+tqdm>=4.66.0

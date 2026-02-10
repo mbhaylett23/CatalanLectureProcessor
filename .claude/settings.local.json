@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "mcp__claude_ai_Hugging_Face__model_search",
+      "mcp__claude_ai_Hugging_Face__hub_repo_details",
+      "mcp__claude_ai_Hugging_Face__hf_doc_search",
+      "Bash(pip install:*)",
+      "Bash(python tests/test_slides.py:*)",
+      "Bash(python:*)",
+      "Bash(where:*)",
+      "Bash(ffmpeg:*)",
+      "Bash(findstr:*)",
+      "Bash(winget install:*)",
+      "Bash(\"g:/My Drive/PythonCode/TranslationProject/venv/Scripts/pip.exe\" install:*)",
+      "Bash(\"g:/My Drive/PythonCode/TranslationProject/venv/Scripts/python.exe\":*)",
+      "Bash(\"g:/My Drive/PythonCode/TranslationProject/venv/Scripts/python.exe\" -c:*)",
+      "Bash(venvScriptspython.exe -c \"import gradio; print\\(gradio.__version__\\)\")",
+      "Bash(\"g:/My Drive/PythonCode/TranslationProject/venv/Scripts/python.exe\" -c \"import gradio; print\\(gradio.__version__\\)\")",
+      "Bash(\"g:/My Drive/PythonCode/TranslationProject/venv/Scripts/python.exe\" -c \"from core.pipeline import LectureProcessor; from ui.app import create_app; print\\(''OK''\\)\")",
+      "Bash(netstat:*)",
+      "Bash(wmic process:*)",
+      "Bash(powershell:*)",
+      "Bash(\"g:/My Drive/PythonCode/TranslationProject/venv/Scripts/python.exe\" -c \"import torch; print\\(f''PyTorch {torch.__version__}''\\); from core.pipeline import LectureProcessor; from ui.app import create_app; print\\(''All imports OK''\\)\")",
+      "Bash(taskkill:*)",
+      "Bash(\"g:\\\\My Drive\\\\PythonCode\\\\TranslationProject\\\\venv\\\\Scripts\\\\python.exe\" -c \"from core.pipeline import LectureProcessor, _step, _progress_bar; print\\(_step\\(1, ''Transcribing'', ''Loading model...''\\)\\); print\\(\\); print\\(_step\\(3, ''Translating'', ''Spanish — batch 5/20'', progress=0.33\\)\\); print\\(\\); print\\(_step\\(4, ''Summarizing'', ''Section 2/4...'', progress=0.5\\)\\)\")",
+      "Bash(\"g:\\\\My Drive\\\\PythonCode\\\\TranslationProject\\\\venv\\\\Scripts\\\\python.exe\":*)",
+      "Bash(\"g:\\\\My Drive\\\\PythonCode\\\\TranslationProject\\\\venv\\\\Scripts\\\\python.exe\" run_desktop.py)",
+      "Bash(timeout:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}
