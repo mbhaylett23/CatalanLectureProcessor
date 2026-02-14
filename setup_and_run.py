@@ -19,8 +19,12 @@ import shutil
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-VENV_DIR = os.path.join(PROJECT_DIR, "venv")
 REQUIREMENTS = os.path.join(PROJECT_DIR, "requirements.txt")
+
+# Virtual environment lives on the LOCAL disk for performance.
+# Cloud-synced drives (Google Drive, OneDrive) are too slow for Python imports.
+_LOCAL_VENV_BASE = os.path.join(os.path.expanduser("~"), ".venvs")
+VENV_DIR = os.path.join(_LOCAL_VENV_BASE, "CatalanLectureProcessor")
 SETUP_MARKER = os.path.join(VENV_DIR, ".setup_complete")
 
 IS_WINDOWS = platform.system() == "Windows"
@@ -96,8 +100,9 @@ def create_venv():
         return
 
     print_step("Creating virtual environment (one-time setup)...")
+    os.makedirs(_LOCAL_VENV_BASE, exist_ok=True)
     subprocess.check_call([sys.executable, "-m", "venv", VENV_DIR])
-    print_step("Virtual environment created")
+    print_step(f"Virtual environment created at {VENV_DIR}")
 
 
 def install_dependencies():
@@ -111,13 +116,22 @@ def install_dependencies():
     print()
 
     subprocess.check_call(
-        [PIP_VENV, "install", "--upgrade", "pip"],
+        [PYTHON_VENV, "-m", "pip", "install", "--upgrade", "pip"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
 
+    # Install PyTorch CPU-only first (avoids downloading the 2GB+ GPU version)
+    print_step("Installing PyTorch (CPU-only)...")
     subprocess.check_call(
-        [PIP_VENV, "install", "-r", REQUIREMENTS],
+        [PYTHON_VENV, "-m", "pip", "install", "torch",
+         "--index-url", "https://download.pytorch.org/whl/cpu"],
+    )
+
+    # Install the rest of the requirements
+    print_step("Installing remaining packages...")
+    subprocess.check_call(
+        [PYTHON_VENV, "-m", "pip", "install", "-r", REQUIREMENTS],
     )
 
     # Write marker so we don't reinstall every time

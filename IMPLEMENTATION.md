@@ -125,7 +125,7 @@ pattern = r"\b(?:per dir-ho d'alguna manera|diguem-ne|...)\b"
 | Backend | API Call | Timeout |
 |---------|----------|---------|
 | Ollama | `POST localhost:11434/api/generate` with `stream: false` | 180s |
-| Gemini | `google.generativeai.GenerativeModel("gemini-2.0-flash")` (note: `google.generativeai` is deprecated, migration to `google.genai` pending) | default |
+| Gemini | `google.genai.Client().models.generate_content(model="gemini-2.0-flash")` | default |
 | HF Inference | `InferenceClient.text_generation(model="meta-llama/Llama-3.2-3B-Instruct")` | default |
 
 ### `core/translator.py`

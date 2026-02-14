@@ -97,9 +97,13 @@ def create_app(mode: str = "auto") -> gr.Blocks:
                 summary_output = gr.Markdown(label="Lecture Summary")
 
             with gr.Tab("Downloads"):
-                gr.Markdown("Download all generated files:")
+                download_zip = gr.File(
+                    label="Download All (ZIP)",
+                    file_count="single",
+                )
+                gr.Markdown("Or download individual files:")
                 download_files = gr.File(
-                    label="Output Files",
+                    label="Individual Files",
                     file_count="multiple",
                 )
 
@@ -134,6 +138,7 @@ def create_app(mode: str = "auto") -> gr.Blocks:
                     translations.get(lang, "") for lang in TARGET_LANGUAGES
                 ]
                 summary = results.get("summary") or ""
+                zip_path = results.get("zip_path")
                 files_list = list(results.get("all_files", {}).values()) or None
                 errors = results.get("errors", [])
                 errors_str = "\n".join(errors) if errors else ""
@@ -145,6 +150,7 @@ def create_app(mode: str = "auto") -> gr.Blocks:
                     clean,
                     *trans_outputs,
                     summary,
+                    zip_path,
                     files_list,
                 )
 
@@ -162,6 +168,7 @@ def create_app(mode: str = "auto") -> gr.Blocks:
             transcript_clean,
             *list(translation_boxes.values()),
             summary_output,
+            download_zip,
             download_files,
         ]
 

@@ -88,11 +88,12 @@ class Summarizer:
         return resp.json().get("response", "").strip()
 
     def _call_gemini(self, prompt: str) -> str:
-        import google.generativeai as genai
+        from google import genai
 
-        genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = model.generate_content(prompt)
+        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        response = client.models.generate_content(
+            model="gemini-2.0-flash", contents=prompt
+        )
         return response.text.strip()
 
     def _call_hf_inference(self, prompt: str) -> str:

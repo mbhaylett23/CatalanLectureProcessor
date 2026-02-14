@@ -5,6 +5,7 @@ import os
 import time
 import tempfile
 import logging
+import zipfile
 
 from core.config import SUPPORTED_AUDIO_FORMATS
 from core.transcriber import Transcriber
@@ -99,8 +100,8 @@ class LectureProcessor:
             "transcript_clean": None,
             "translations": {},
             "summary": None,
-            "summary_data": None,
-            "slides_path": None,
+            "summaries": {},
+            "summaries_data": {},
             "all_files": {},
             "errors": [],
             "timings": {},
@@ -245,61 +246,102 @@ class LectureProcessor:
             results["errors"].append(f"Translation failed: {e}")
 
         # ============================================================
-        # Step 4: Summarize
+        # Step 4: Summarize (per translated language)
         # ============================================================
         t0 = time.time()
-        text_to_summarize = results["transcript_clean"] or results["transcript_raw"]
-        try:
-            summary_data = None
-            for update in self._get_summarizer().summarize_streaming(
-                text_to_summarize, "Catalan"
-            ):
-                if update["done"]:
-                    summary_data = update["result"]
-                else:
-                    desc = update.get("desc", "")
-                    progress = update.get("progress")
-                    yield (
-                        _step(4, "Summarizing", desc, progress=progress),
-                        results,
-                    )
+        num_summary_langs = len(target_languages)
+        for lang_idx, lang in enumerate(target_languages):
+            translated_text = results["translations"].get(lang, "")
+            if not translated_text or translated_text.startswith("[Translation"):
+                continue
 
-            results["summary"] = summary_data.get("raw_summary")
-            results["summary_data"] = summary_data
-            results["timings"]["summarization"] = time.time() - t0
+            try:
+                summary_data = None
+                for update in self._get_summarizer().summarize_streaming(
+                    translated_text, lang
+                ):
+                    if update["done"]:
+                        summary_data = update["result"]
+                    else:
+                        desc = update.get("desc", "")
+                        sub_progress = update.get("progress", 0.5)
+                        lang_base = lang_idx / num_summary_langs
+                        lang_portion = 1 / num_summary_langs
+                        total_frac = lang_base + lang_portion * sub_progress
+                        yield (
+                            _step(4, "Summarizing",
+                                  f"{lang} \u2014 {desc}",
+                                  progress=total_frac),
+                            results,
+                        )
 
-            if results["summary"]:
-                summary_path = os.path.join(output_dir, "summary.md")
-                self._save_text(results["summary"], summary_path)
-                results["all_files"]["summary.md"] = summary_path
-        except Exception as e:
-            logger.error("Summarization failed: %s", e)
-            results["errors"].append(f"Summarization failed: {e}")
+                raw = summary_data.get("raw_summary") if summary_data else None
+                results["summaries"][lang] = raw
+                results["summaries_data"][lang] = summary_data or {}
+
+                if raw:
+                    filename = f"summary_{lang.lower()}.md"
+                    filepath = os.path.join(output_dir, filename)
+                    self._save_text(raw, filepath)
+                    results["all_files"][filename] = filepath
+            except Exception as e:
+                logger.error("Summarization for %s failed: %s", lang, e)
+                results["errors"].append(f"Summarization ({lang}) failed: {e}")
+
+        results["timings"]["summarization"] = time.time() - t0
+
+        # Build combined summary for UI display
+        summary_parts = []
+        for lang in target_languages:
+            raw = results["summaries"].get(lang)
+            if raw:
+                summary_parts.append(f"## {lang}\n\n{raw}")
+        results["summary"] = "\n\n---\n\n".join(summary_parts) if summary_parts else None
 
         # ============================================================
-        # Step 5: Generate slides
+        # Step 5: Generate slides (per language)
         # ============================================================
         yield (_step(5, "Creating slides"), results)
 
         t0 = time.time()
-        try:
-            summary_data = results.get("summary_data") or {}
-            if summary_data.get("main_topics") or summary_data.get("sections"):
-                slides_path = os.path.join(output_dir, "lecture_slides.pptx")
-                audio_name = os.path.splitext(os.path.basename(audio_path))[0]
+        slides_created = 0
+        audio_name = os.path.splitext(os.path.basename(audio_path))[0]
+        for lang in target_languages:
+            summary_data = results.get("summaries_data", {}).get(lang, {})
+            if not (summary_data.get("main_topics") or summary_data.get("sections")):
+                continue
+
+            try:
+                slides_path = os.path.join(
+                    output_dir, f"lecture_slides_{lang.lower()}.pptx"
+                )
                 self._slide_generator.generate(
-                    summary_data, title=audio_name, output_path=slides_path
+                    summary_data,
+                    title=f"{audio_name} ({lang})",
+                    output_path=slides_path,
                 )
-                results["slides_path"] = slides_path
-                results["all_files"]["lecture_slides.pptx"] = slides_path
-                results["timings"]["slides"] = time.time() - t0
-            else:
-                results["errors"].append(
-                    "Slides skipped: no summary data available"
-                )
-        except Exception as e:
-            logger.error("Slide generation failed: %s", e)
-            results["errors"].append(f"Slide generation failed: {e}")
+                results["all_files"][f"lecture_slides_{lang.lower()}.pptx"] = slides_path
+                slides_created += 1
+            except Exception as e:
+                logger.error("Slide generation for %s failed: %s", lang, e)
+                results["errors"].append(f"Slides ({lang}) failed: {e}")
+
+        if slides_created == 0:
+            results["errors"].append("Slides skipped: no summary data available")
+        results["timings"]["slides"] = time.time() - t0
+
+        # ============================================================
+        # Create ZIP of all output files
+        # ============================================================
+        if results["all_files"]:
+            try:
+                zip_path = os.path.join(output_dir, "lecture_all_files.zip")
+                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for filename, filepath in results["all_files"].items():
+                        zf.write(filepath, filename)
+                results["zip_path"] = zip_path
+            except Exception as e:
+                logger.error("ZIP creation failed: %s", e)
 
         # Build timing summary
         timing_parts = [f"{k}: {v:.1f}s" for k, v in results["timings"].items()]
