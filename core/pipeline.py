@@ -5,6 +5,7 @@ import os
 import time
 import tempfile
 import logging
+import shutil
 import zipfile
 
 from core.config import SUPPORTED_AUDIO_FORMATS
@@ -108,6 +109,11 @@ class LectureProcessor:
         }
 
         output_dir = tempfile.mkdtemp(prefix="lecture_")
+
+        # Copy audio so Gradio and transcriber don't lock the same file (Windows)
+        audio_copy = os.path.join(output_dir, os.path.basename(audio_path))
+        shutil.copy2(audio_path, audio_copy)
+        audio_path = audio_copy
 
         # -- Validate --
         yield ("Validating audio file...", results)
