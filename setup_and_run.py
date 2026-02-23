@@ -25,6 +25,7 @@ REQUIREMENTS = os.path.join(PROJECT_DIR, "requirements.txt")
 # Cloud-synced drives (Google Drive, OneDrive) are too slow for Python imports.
 _LOCAL_VENV_BASE = os.path.join(os.path.expanduser("~"), ".venvs")
 VENV_DIR = os.path.join(_LOCAL_VENV_BASE, "CatalanLectureProcessor")
+SETUP_VERSION = "2"  # Bump this to force reinstall on next launch
 SETUP_MARKER = os.path.join(VENV_DIR, ".setup_complete")
 
 IS_WINDOWS = platform.system() == "Windows"
@@ -59,7 +60,8 @@ def check_python():
         print(f"  Download the latest from: https://www.python.org/downloads/")
         input("\n  Press Enter to exit...")
         sys.exit(1)
-    print_step(f"Python {major}.{minor} detected")
+    arch = platform.machine()  # e.g. x86_64, arm64, AMD64
+    print_step(f"Python {major}.{minor} detected ({platform.system()} {arch})")
 
 
 def check_ffmpeg():
@@ -108,8 +110,14 @@ def create_venv():
 def install_dependencies():
     """Install pip packages if not already done."""
     if os.path.exists(SETUP_MARKER):
-        print_step("Dependencies already installed")
-        return
+        try:
+            with open(SETUP_MARKER) as f:
+                if f.read().strip() == SETUP_VERSION:
+                    print_step("Dependencies already installed")
+                    return
+                print_step("Setup updated -- reinstalling dependencies...")
+        except OSError:
+            pass
 
     print_step("Installing dependencies (this may take a few minutes)...")
     print_step("Downloading: Whisper, translation models, UI framework...")
@@ -121,12 +129,20 @@ def install_dependencies():
         stderr=subprocess.DEVNULL,
     )
 
-    # Install PyTorch CPU-only first (avoids downloading the 2GB+ GPU version)
-    print_step("Installing PyTorch (CPU-only)...")
-    subprocess.check_call(
-        [PYTHON_VENV, "-m", "pip", "install", "torch",
-         "--index-url", "https://download.pytorch.org/whl/cpu"],
-    )
+    # Install PyTorch — platform-specific to avoid downloading huge GPU builds
+    if IS_WINDOWS:
+        # Windows: use CPU-only index (saves downloading 2GB+ CUDA version)
+        print_step("Installing PyTorch (CPU-only)...")
+        subprocess.check_call(
+            [PYTHON_VENV, "-m", "pip", "install", "torch",
+             "--index-url", "https://download.pytorch.org/whl/cpu"],
+        )
+    else:
+        # macOS (Intel + Apple Silicon): default PyPI wheel works on both
+        print_step("Installing PyTorch...")
+        subprocess.check_call(
+            [PYTHON_VENV, "-m", "pip", "install", "torch"],
+        )
 
     # Install the rest of the requirements
     print_step("Installing remaining packages...")
@@ -136,7 +152,7 @@ def install_dependencies():
 
     # Write marker so we don't reinstall every time
     with open(SETUP_MARKER, "w") as f:
-        f.write("setup complete")
+        f.write(SETUP_VERSION)
 
     print()
     print_step("All dependencies installed!")
@@ -148,13 +164,15 @@ def launch_app():
     print_step("Starting app... your browser will open automatically.")
     print_step("When you're done, close this window to stop the app.")
     print()
-    print("  ─────────────────────────────────────────────────")
+    print("  -------------------------------------------------")
     print("  The app runs at: http://127.0.0.1:7860")
-    print("  ─────────────────────────────────────────────────")
+    print("  -------------------------------------------------")
     print()
 
     run_desktop = os.path.join(PROJECT_DIR, "run_desktop.py")
-    subprocess.call([PYTHON_VENV, run_desktop])
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+    subprocess.call([PYTHON_VENV, run_desktop], env=env)
 
 
 def main():

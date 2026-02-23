@@ -11,6 +11,12 @@ import logging
 # Add project root to path so 'core' and 'ui' can be imported
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Fix Windows console encoding — prevents UnicodeEncodeError with progress bars
+if sys.platform == "win32":
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
 # Suppress HuggingFace tqdm download bars (they interfere with Gradio progress)
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"

@@ -121,35 +121,49 @@ The same tool, but running on your own computer instead of Google's. Good for wh
 
 You'll need someone to help you with these steps the first time. After that, you just double-click the icon.
 
-**Step 1: Install Python** (the language the app is written in)
+**Step 1: Install Homebrew, Python, and ffmpeg** (Mac only)
 
-- **Mac:** Open the **Terminal** app (search for it in Spotlight) and paste:
-  ```
-  brew install python@3.12 ffmpeg
-  ```
-  (If `brew` isn't installed, first paste this:)
-  ```
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  ```
+Open the **Terminal** app (press Cmd+Space, type "Terminal", press Enter) and paste these commands one at a time:
 
-- **Windows:** Download Python from [python.org](https://www.python.org/downloads/) and install it.
-  **IMPORTANT: tick the box that says "Add Python to PATH" during installation.**
-  Then open Command Prompt and type:
-  ```
-  winget install ffmpeg
-  ```
+1. **Install Homebrew** (a package manager for Mac):
+   ```
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   ```
+   Follow the instructions on screen. When it finishes, **read the output carefully** - on Apple Silicon Macs (M1/M2/M3/M4), it will tell you to run two extra commands to add Homebrew to your PATH. Copy and paste those commands too.
 
-**Step 2: Create the desktop icon**
+2. **Install Python and ffmpeg:**
+   ```
+   brew install python@3.12 ffmpeg
+   ```
+   This takes a few minutes. Wait until you see the `$` prompt again.
 
-- **Windows:** Double-click `create_shortcut_windows.bat` in the project folder. A shortcut called **"Catalan Lecture Processor"** will appear on your desktop.
+3. **Verify it worked** (optional):
+   ```
+   python3 --version
+   ffmpeg -version
+   ```
+   You should see version numbers, not errors.
 
-- **Mac:** Double-click `create_shortcut_mac.command` in the project folder. An app called **"Catalan Lecture Processor"** will appear on your desktop.
-  - macOS may ask you to allow it: go to **System Settings > Privacy & Security** and click **Allow**.
+> **Windows users:** Download Python from [python.org](https://www.python.org/downloads/) and install it. **IMPORTANT: tick the box that says "Add Python to PATH"** during installation. Then open Command Prompt and type: `winget install ffmpeg`
 
-**Step 3 (optional): Install Ollama** for smarter text cleanup and summaries
+**Step 2: Download the project**
 
-- **Mac:** Open Terminal and paste: `brew install ollama && ollama pull llama3.2:3b`
-- **Windows:** Download from [ollama.com](https://ollama.com/download/windows), install it, then open Command Prompt and type: `ollama pull llama3.2:3b`
+Your instructor will share the project folder with you (via Google Drive or as a ZIP file). Download it to a convenient location like your Desktop or Documents folder.
+
+**Step 3: Run the app**
+
+- **Mac:** Double-click `launch.command` in the project folder.
+  - **First time:** macOS will likely block it. Right-click the file, choose **Open**, then click **Open** in the dialog. You only need to do this once.
+  - If that doesn't work: go to **System Settings > Privacy & Security**, scroll down, and click **Allow Anyway** next to the message about `launch.command`.
+
+- **Windows:** Double-click `launch.bat` in the project folder.
+
+The first run takes a few minutes to download and install everything (~2GB). After that, it starts in seconds.
+
+**Step 4 (optional): Create a desktop icon**
+
+- **Mac:** Double-click `create_shortcut_mac.command` (same right-click > Open trick). An app called **"Catalan Lecture Processor"** will appear on your desktop.
+- **Windows:** Double-click `create_shortcut_windows.bat`. A shortcut appears on your desktop.
 
 That's it for setup!
 

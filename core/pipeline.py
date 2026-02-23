@@ -21,16 +21,16 @@ TOTAL_STEPS = 5
 
 
 def _progress_bar(fraction, width=30):
-    """Render a text-based progress bar like [████████░░░░░░░░░░░░] 40%"""
+    """Render a text-based progress bar like [========............] 40%"""
     fraction = max(0.0, min(1.0, fraction))
     filled = int(width * fraction)
-    bar = "\u2588" * filled + "\u2591" * (width - filled)
+    bar = "=" * filled + "." * (width - filled)
     return f"[{bar}] {fraction * 100:.0f}%"
 
 
 def _step(n, title, detail="", progress=None):
     """Format a step status string with optional progress bar."""
-    header = f"Step {n}/{TOTAL_STEPS} \u2014 {title}"
+    header = f"Step {n}/{TOTAL_STEPS} - {title}"
     if progress is not None:
         header += f"  {_progress_bar(progress)}"
     if detail:
@@ -224,7 +224,7 @@ class LectureProcessor:
                             lang_portion = 1 / num_langs
                             total_frac = lang_base + lang_portion * update["progress"]
                             detail = (
-                                f"{lang} \u2014 batch {update['batch']}"
+                                f"{lang} - batch {update['batch']}"
                                 f"/{update['total']}"
                             )
                             yield (
@@ -276,7 +276,7 @@ class LectureProcessor:
                         total_frac = lang_base + lang_portion * sub_progress
                         yield (
                             _step(4, "Summarizing",
-                                  f"{lang} \u2014 {desc}",
+                                  f"{lang} - {desc}",
                                   progress=total_frac),
                             results,
                         )
