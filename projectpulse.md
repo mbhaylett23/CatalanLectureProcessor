@@ -1,15 +1,15 @@
 # ProjectPulse - Catalan Lecture Processor
 
-- **Status**: Desktop app working end-to-end. Mac Apple Silicon support added. Ready for student deployment.
-- **Last worked on**: Fixed PyTorch install for Apple Silicon Macs (CPU-only index has no ARM64 wheels -- now uses default PyPI on Mac). Improved launch.command with Python check and error handling. Updated student guide with detailed Mac setup steps including Homebrew PATH note. Added setup version marker for forced reinstall on logic changes. Previous session fixed Windows UnicodeEncodeError crash.
+- **Status**: New faster-whisper notebook created to replace transformers-based Whisper pipeline. Pending Colab testing.
+- **Last worked on**: Created `lecture_processor_faster_whisper.ipynb` using faster-whisper (CTranslate2) with Silero VAD to eliminate hallucinations (repeated words/phrases during silence). Expected 2-4x speedup and ~50% less VRAM vs original. Original notebook also patched with anti-hallucination generate_kwargs.
 - **Next steps**:
-  - Have student test on their Apple Silicon Mac end-to-end
-  - Test Colab notebook on actual Google Colab after Gradio 6.x updates
-  - Consider creating a zip distribution excluding venv/.git/audio files
-- **Blockers**: None -- needs real Mac testing by student
+  - Test `lecture_processor_faster_whisper.ipynb` on Colab with the same 58-min audio that triggered hallucinations
+  - Compare transcription quality between faster-whisper (base large-v3) and original (Catalan fine-tune)
+  - If faster-whisper works well, consider making it the default student notebook
+- **Blockers**: None
 - **Key files**:
-  - `setup_and_run.py` - Auto-setup script (PyTorch platform fix here)
-  - `launch.command` - Mac launcher (improved with Python check)
-  - `GUIDE_FOR_STUDENTS.md` - Student instructions (Mac section rewritten)
-  - `core/pipeline.py` - Main pipeline orchestrator
-  - `ui/app.py` - Gradio UI (desktop + Colab shared)
+  - `colab/lecture_processor_faster_whisper.ipynb` - New faster-whisper notebook (recommended for testing)
+  - `colab/lecture_processor_simple.ipynb` - Original transformers-based notebook (anti-hallucination patches applied)
+  - `core/pipeline.py` - Main pipeline orchestrator (desktop version)
+  - `COLAB_TROUBLESHOOTING.md` - Student-facing troubleshooting guide
+  - `ui/app.py` - Gradio UI (desktop version)
