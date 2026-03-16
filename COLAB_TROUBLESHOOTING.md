@@ -133,6 +133,25 @@ This error means the final cell (Cell 11) ran before the earlier cells that defi
 
 ---
 
+### Solution 11: Translation output is gibberish / repeated words
+
+If the translation tab shows repeated words like "yo yo yo", "i i i", "por por por" — this is a known NLLB model hallucination issue.
+
+**This has been fixed in the latest version of the notebook.** If you're seeing this:
+
+1. Make sure you're using the **latest version** of `lecture_processor.ipynb` (re-download from Google Drive if needed)
+2. Click **Runtime > Disconnect and delete runtime** to clear the old session
+3. Click **Runtime > Run all** to start fresh
+
+**What was fixed:**
+- Upgraded translation model from 600M to 3.3B (much more accurate)
+- Added `no_repeat_ngram_size=3` to prevent repetition loops
+- Added beam search (`num_beams=5`) for better translation quality
+- Added post-processing to catch any remaining repeated words
+- Added automatic quality check that warns if translation looks wrong
+
+---
+
 ## Quick checklist before asking for help
 
 1. Is "T4 (Python 3)" shown in the bottom-right? (GPU is connected)

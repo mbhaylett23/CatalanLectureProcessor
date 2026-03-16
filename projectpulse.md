@@ -1,15 +1,15 @@
 # ProjectPulse - Catalan Lecture Processor
 
-- **Status**: UI defaults changed to English; summarization/slides require Gemini API key or LLM backend
-- **Last worked on**: Changed notebook UI default language from Catalan to English (dropdown, state, tab names, HTML lang, skip-nav, fallbacks). Discussed BSC hosting for permanent student access and Gemini API key as quick fix for summarization.
+- **Status**: Fixed critical NLLB translation hallucination bug in both Colab notebook and desktop code
+- **Last worked on**: Upgraded Colab notebook to NLLB-200 3.3B model with anti-hallucination parameters (no_repeat_ngram_size=3, num_beams=5), post-processing safety net, translation quality check, and Whisper GPU unload. Fixed core/translator.py with same params. Created COLAB_TROUBLESHOOTING.md for student support.
 - **Next steps**:
-  - Get a free Gemini API key to enable summarization and slides on Colab
-  - Draft and send email to Cristina about BSC hosting
-  - Consider adding source language selection (Spanish input support)
-- **Blockers**: No LLM backend configured on Colab (summarization/slides skipped without Gemini key)
+  - Have student re-test with updated notebook to confirm hallucination fix
+  - Test that 3.3B model fits in T4 VRAM with Whisper unload flow
+  - Regenerate COLAB_TROUBLESHOOTING.pdf from updated markdown
+- **Blockers**: Awaiting student re-test to confirm fix
 - **Key files**:
-  - `colab/lecture_processor_faster_whisper.ipynb` - Main notebook (now defaults to English UI)
-  - `core/pipeline.py` - Desktop pipeline orchestrator
+  - `colab/lecture_processor.ipynb` - Main Colab notebook (Cells 4, 7, 10 updated)
+  - `core/translator.py` - Desktop translation module (anti-hallucination added)
+  - `COLAB_TROUBLESHOOTING.md` - Student-facing troubleshooting guide
   - `core/config.py` - Central configuration
   - `ui/app.py` - Gradio UI (desktop version)
-  - `DEPLOYMENT_OPTIONS.md` - Platform comparison

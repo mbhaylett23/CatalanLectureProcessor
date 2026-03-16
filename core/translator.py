@@ -8,6 +8,17 @@ from core.config import NLLB_MODEL, LANGUAGE_CODES, NLLB_MAX_LENGTH, NLLB_BATCH_
 logger = logging.getLogger(__name__)
 
 
+def _remove_hallucinations(text: str) -> str:
+    """Post-processing safety net: collapse repeated words/phrases."""
+    # Collapse 3+ consecutive identical words → single word
+    text = re.sub(r"\b(\w+)(?:\s+\1){2,}\b", r"\1", text, flags=re.IGNORECASE)
+    # Collapse 2+ consecutive identical 2-word phrases
+    text = re.sub(r"\b(\w+\s+\w+)(?:\s+\1){1,}\b", r"\1", text, flags=re.IGNORECASE)
+    # Clean up extra whitespace
+    text = re.sub(r"  +", " ", text).strip()
+    return text
+
+
 class Translator:
     """Translate text between languages using NLLB-200-distilled-600M."""
 
@@ -112,11 +123,13 @@ class Translator:
                 **inputs,
                 forced_bos_token_id=tgt_token_id,
                 max_length=NLLB_MAX_LENGTH,
+                num_beams=4,
+                no_repeat_ngram_size=3,
             )
             decoded = self._tokenizer.batch_decode(outputs, skip_special_tokens=True)
             translated_parts.extend(decoded)
 
-        yield {"done": True, "result": " ".join(translated_parts)}
+        yield {"done": True, "result": _remove_hallucinations(" ".join(translated_parts))}
 
     def translate_text(self, text: str, source_lang: str, target_lang: str) -> str:
         """Translate text from source to target language.
@@ -160,11 +173,13 @@ class Translator:
                 **inputs,
                 forced_bos_token_id=tgt_token_id,
                 max_length=NLLB_MAX_LENGTH,
+                num_beams=4,
+                no_repeat_ngram_size=3,
             )
             decoded = self._tokenizer.batch_decode(outputs, skip_special_tokens=True)
             translated_parts.extend(decoded)
 
-        return " ".join(translated_parts)
+        return _remove_hallucinations(" ".join(translated_parts))
 
     def translate_to_languages(
         self,
