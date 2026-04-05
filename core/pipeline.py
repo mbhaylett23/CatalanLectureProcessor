@@ -2,13 +2,18 @@
 summarization, and slide generation."""
 
 import os
+import re
 import time
 import tempfile
 import logging
 import shutil
 import zipfile
+from datetime import datetime
 
 from core.config import SUPPORTED_AUDIO_FORMATS
+
+# Persistent output directory (sibling to project root)
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "outputs")
 from core.transcriber import Transcriber
 from core.cleaner import TextCleaner
 from core.translator import Translator
@@ -90,12 +95,46 @@ class LectureProcessor:
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(text)
 
-    def process(self, audio_path: str, target_languages: list[str], **kwargs):
+    def _save_to_outputs(self, audio_path: str, results: dict, username: str = None):
+        """Copy all output files to a persistent outputs/ folder."""
+        # Build folder name: YYYY-MM-DD_audio-filename
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        base_name = os.path.splitext(os.path.basename(audio_path))[0]
+        # Sanitize: keep only alphanumeric, hyphens, underscores
+        safe_name = re.sub(r"[^\w\-]", "_", base_name).strip("_")
+        folder_name = f"{date_str}_{safe_name}"
+
+        # Per-user subdirectory if logged in
+        base_dir = os.path.join(OUTPUT_DIR, username) if username else OUTPUT_DIR
+        save_dir = os.path.join(base_dir, folder_name)
+        os.makedirs(save_dir, exist_ok=True)
+
+        saved = 0
+        for filename, filepath in results.get("all_files", {}).items():
+            try:
+                shutil.copy2(filepath, os.path.join(save_dir, filename))
+                saved += 1
+            except Exception as e:
+                logger.warning("Failed to save %s: %s", filename, e)
+
+        # Also copy the ZIP if it exists
+        zip_path = results.get("zip_path")
+        if zip_path and os.path.isfile(zip_path):
+            try:
+                shutil.copy2(zip_path, os.path.join(save_dir, "lecture_all_files.zip"))
+            except Exception as e:
+                logger.warning("Failed to save ZIP: %s", e)
+
+        logger.info("Saved %d files to %s", saved, save_dir)
+        return save_dir
+
+    def process(self, audio_path: str, target_languages: list[str], username: str = None, **kwargs):
         """Run the full processing pipeline as a generator.
 
         Yields (status_message, results_dict) tuples so the UI can show
         real-time progress with step numbers and progress bars.
         """
+        gemini_api_key = kwargs.get("gemini_api_key")
         results = {
             "transcript_raw": None,
             "transcript_clean": None,
@@ -176,7 +215,8 @@ class LectureProcessor:
         try:
             clean_result = None
             for update in self._get_cleaner().clean_streaming(
-                results["transcript_raw"]
+                results["transcript_raw"],
+                api_key=gemini_api_key,
             ):
                 if update["done"]:
                     clean_result = update["result"]
@@ -202,19 +242,21 @@ class LectureProcessor:
         # ============================================================
         # Step 3: Translate
         # ============================================================
-        yield (_step(3, "Translating", "Loading model... (this takes up to 30s)"), results)
+        yield (_step(3, "Translating", "Preparing translation backend..."), results)
 
         t0 = time.time()
         text_to_translate = results["transcript_clean"] or results["transcript_raw"]
         try:
             translator = self._get_translator()
-            translator._ensure_loaded()
 
             num_langs = len(target_languages)
             for i, lang in enumerate(target_languages):
                 try:
                     for update in translator.translate_text_streaming(
-                        text_to_translate, "Catalan", lang
+                        text_to_translate,
+                        "Catalan",
+                        lang,
+                        api_key=gemini_api_key,
                     ):
                         if update["done"]:
                             results["translations"][lang] = update["result"]
@@ -223,8 +265,11 @@ class LectureProcessor:
                             lang_base = i / num_langs
                             lang_portion = 1 / num_langs
                             total_frac = lang_base + lang_portion * update["progress"]
+                            backend = update.get("backend")
                             detail = (
-                                f"{lang} - batch {update['batch']}"
+                                f"{lang}"
+                                + (f" ({backend})" if backend else "")
+                                + f" - batch {update['batch']}"
                                 f"/{update['total']}"
                             )
                             yield (
@@ -264,7 +309,9 @@ class LectureProcessor:
             try:
                 summary_data = None
                 for update in self._get_summarizer().summarize_streaming(
-                    translated_text, lang
+                    translated_text,
+                    lang,
+                    api_key=gemini_api_key,
                 ):
                     if update["done"]:
                         summary_data = update["result"]
@@ -348,6 +395,16 @@ class LectureProcessor:
                 results["zip_path"] = zip_path
             except Exception as e:
                 logger.error("ZIP creation failed: %s", e)
+
+        # ============================================================
+        # Save to persistent outputs/ folder
+        # ============================================================
+        try:
+            save_dir = self._save_to_outputs(audio_path, results, username=username)
+            results["save_dir"] = save_dir
+        except Exception as e:
+            logger.error("Failed to save outputs: %s", e)
+            results["errors"].append(f"Save to outputs/ failed: {e}")
 
         # Build timing summary
         timing_parts = [f"{k}: {v:.1f}s" for k, v in results["timings"].items()]

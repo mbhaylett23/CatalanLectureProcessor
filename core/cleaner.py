@@ -9,10 +9,12 @@ import requests
 from core.config import (
     CATALAN_FILLERS,
     CLEANUP_PROMPT,
+    GEMINI_MODEL,
     OLLAMA_URL,
     OLLAMA_MODEL,
     LLM_CHUNK_MAX_WORDS,
 )
+from core.genai import get_genai_client, has_google_genai_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +73,12 @@ class TextCleaner:
         self._backend = llm_backend
         self._resolved_backend = None
 
-    def _detect_available_backend(self) -> str:
+    def _detect_available_backend(self, api_key: str | None = None) -> str:
         """Probe which LLM backends are available."""
+        if api_key:
+            logger.info("LLM backend: using provided Google GenAI API key")
+            return "gemini"
+
         # Try Ollama
         try:
             resp = requests.get(f"{OLLAMA_URL}/api/tags", timeout=3)
@@ -83,7 +89,7 @@ class TextCleaner:
             pass
 
         # Try Gemini
-        if os.environ.get("GEMINI_API_KEY"):
+        if has_google_genai_api_key():
             logger.info("LLM backend: Gemini API key found")
             return "gemini"
 
@@ -95,9 +101,11 @@ class TextCleaner:
         logger.info("LLM backend: none available, regex-only mode")
         return "none"
 
-    def _get_backend(self) -> str:
+    def _get_backend(self, api_key: str | None = None) -> str:
         if self._backend != "auto":
             return self._backend
+        if api_key:
+            return self._detect_available_backend(api_key=api_key)
         if self._resolved_backend is None:
             self._resolved_backend = self._detect_available_backend()
         return self._resolved_backend
@@ -121,13 +129,11 @@ class TextCleaner:
         resp.raise_for_status()
         return resp.json().get("response", "").strip()
 
-    def _call_gemini(self, prompt: str) -> str:
+    def _call_gemini(self, prompt: str, api_key: str | None = None) -> str:
         """Call Google Gemini free API."""
-        from google import genai
-
-        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        client = get_genai_client(api_key)
         response = client.models.generate_content(
-            model="gemini-2.0-flash", contents=prompt
+            model=GEMINI_MODEL, contents=prompt
         )
         return response.text.strip()
 
@@ -143,34 +149,36 @@ class TextCleaner:
         )
         return response.strip()
 
-    def _call_llm(self, prompt: str) -> str | None:
+    def _call_llm(self, prompt: str, api_key: str | None = None) -> str | None:
         """Call the selected LLM backend. Returns None on failure."""
-        backend = self._get_backend()
+        backend = self._get_backend(api_key=api_key)
         if backend == "none":
             return None
 
-        callers = {
-            "ollama": self._call_ollama,
-            "gemini": self._call_gemini,
-            "hf_inference": self._call_hf_inference,
-        }
-        caller = callers.get(backend)
-        if not caller:
-            return None
-
         try:
-            return caller(prompt)
+            if backend == "ollama":
+                return self._call_ollama(prompt)
+            if backend == "gemini":
+                return self._call_gemini(prompt, api_key=api_key)
+            if backend == "hf_inference":
+                return self._call_hf_inference(prompt)
+            return None
         except Exception as e:
             logger.warning("LLM call failed (%s): %s", backend, e)
             return None
 
-    def llm_restructure(self, text: str, progress_callback=None) -> str | None:
+    def llm_restructure(
+        self,
+        text: str,
+        progress_callback=None,
+        api_key: str | None = None,
+    ) -> str | None:
         """Send text to LLM for paragraph restructuring.
 
         Chunks long texts to stay within context limits.
         Returns restructured text or None if LLM is unavailable.
         """
-        if self._get_backend() == "none":
+        if self._get_backend(api_key=api_key) == "none":
             return None
 
         chunks = _chunk_text(text)
@@ -182,7 +190,7 @@ class TextCleaner:
                 progress_callback(frac, desc=f"Restructuring text... chunk {i+1}/{len(chunks)}")
 
             prompt = CLEANUP_PROMPT.format(text=chunk)
-            result = self._call_llm(prompt)
+            result = self._call_llm(prompt, api_key=api_key)
             if result:
                 restructured_parts.append(result)
             else:
@@ -190,7 +198,7 @@ class TextCleaner:
 
         return "\n\n".join(restructured_parts)
 
-    def clean_streaming(self, text: str):
+    def clean_streaming(self, text: str, api_key: str | None = None):
         """Generator version of clean() that yields progress updates.
 
         Yields dicts: {desc, progress (optional), done: False} during processing,
@@ -199,7 +207,7 @@ class TextCleaner:
         yield {"desc": "Removing filler words...", "done": False}
         regex_cleaned = self.regex_clean(text)
 
-        backend = self._get_backend()
+        backend = self._get_backend(api_key=api_key)
         if backend == "none":
             yield {"done": True, "result": {
                 "regex_cleaned": regex_cleaned,
@@ -218,7 +226,7 @@ class TextCleaner:
                 "done": False,
             }
             prompt = CLEANUP_PROMPT.format(text=chunk)
-            result = self._call_llm(prompt)
+            result = self._call_llm(prompt, api_key=api_key)
             restructured_parts.append(result if result else chunk)
 
         llm_cleaned = "\n\n".join(restructured_parts)
@@ -229,7 +237,7 @@ class TextCleaner:
             "llm_backend_used": backend,
         }}
 
-    def clean(self, text: str, progress_callback=None) -> dict:
+    def clean(self, text: str, progress_callback=None, api_key: str | None = None) -> dict:
         """Full cleaning pipeline.
 
         Returns:
@@ -243,8 +251,12 @@ class TextCleaner:
         if progress_callback:
             progress_callback(0.52, desc="Restructuring text with LLM...")
 
-        llm_cleaned = self.llm_restructure(regex_cleaned, progress_callback)
-        backend_used = self._get_backend()
+        llm_cleaned = self.llm_restructure(
+            regex_cleaned,
+            progress_callback,
+            api_key=api_key,
+        )
+        backend_used = self._get_backend(api_key=api_key)
 
         return {
             "regex_cleaned": regex_cleaned,

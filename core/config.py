@@ -9,6 +9,7 @@ WHISPER_FASTER_FALLBACK = "Systran/faster-whisper-large-v3"
 
 # Translation
 NLLB_MODEL = "facebook/nllb-200-distilled-600M"
+GEMINI_MODEL = "gemini-2.0-flash"
 
 # ── Language codes (NLLB FLORES-200 format) ────────────────────────────────────
 
@@ -84,6 +85,10 @@ capturing the key points, concepts, and any important terminology.
 Section:
 {text}"""
 
+TRANSLATION_PROMPT = """Translate the following Catalan university lecture transcript to {language}. Preserve scientific terminology accurately. Return only the translation.
+
+{text}"""
+
 # ── Ollama config ──────────────────────────────────────────────────────────────
 
 OLLAMA_URL = "http://localhost:11434"
@@ -108,6 +113,7 @@ WHISPER_VAD_PARAMS = {
 
 NLLB_MAX_LENGTH = 512
 NLLB_BATCH_MAX_TOKENS = 400
+TRANSLATION_CHUNK_MAX_WORDS = 3000
 
 # ── Summarization settings ─────────────────────────────────────────────────────
 

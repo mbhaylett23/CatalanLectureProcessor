@@ -19,6 +19,7 @@ venv/
 # Output files
 *.pptx
 output/
+outputs/
 
 # Keep requirements files
 !requirements*.txt
@@ -33,5 +34,16 @@ nul
 .vscode/
 .idea/
 
+# User credentials
+auth/
+
 # Environment / secrets
 .env
+
+# Large binary files
+*.mp4
+*.zip
+*.pdf
+
+# Gradio cache
+.gradio/

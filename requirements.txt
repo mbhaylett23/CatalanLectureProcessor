@@ -12,6 +12,7 @@ protobuf>=4.25.0
 
 # LLM backends (optional - install the ones you need)
 google-genai>=1.0.0
+firebase-admin>=6.6.0
 huggingface-hub>=0.25.0
 requests>=2.31.0
 

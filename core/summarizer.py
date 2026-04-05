@@ -9,10 +9,12 @@ import requests
 from core.config import (
     SUMMARY_PROMPT,
     CHUNK_SUMMARY_PROMPT,
+    GEMINI_MODEL,
     OLLAMA_URL,
     OLLAMA_MODEL,
     LLM_CHUNK_MAX_WORDS,
 )
+from core.genai import get_genai_client, has_google_genai_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,10 @@ class Summarizer:
         self._backend = llm_backend
         self._resolved_backend = None
 
-    def _detect_available_backend(self) -> str:
+    def _detect_available_backend(self, api_key: str | None = None) -> str:
+        if api_key:
+            return "gemini"
+
         try:
             resp = requests.get(f"{OLLAMA_URL}/api/tags", timeout=3)
             if resp.status_code == 200:
@@ -48,22 +53,24 @@ class Summarizer:
         except (requests.ConnectionError, requests.Timeout):
             pass
 
-        if os.environ.get("GEMINI_API_KEY"):
+        if has_google_genai_api_key():
             return "gemini"
         if os.environ.get("HF_TOKEN"):
             return "hf_inference"
 
         return "none"
 
-    def _get_backend(self) -> str:
+    def _get_backend(self, api_key: str | None = None) -> str:
         if self._backend != "auto":
             return self._backend
+        if api_key:
+            return self._detect_available_backend(api_key=api_key)
         if self._resolved_backend is None:
             self._resolved_backend = self._detect_available_backend()
         return self._resolved_backend
 
-    def _call_llm(self, prompt: str) -> str | None:
-        backend = self._get_backend()
+    def _call_llm(self, prompt: str, api_key: str | None = None) -> str | None:
+        backend = self._get_backend(api_key=api_key)
         if backend == "none":
             return None
 
@@ -71,7 +78,7 @@ class Summarizer:
             if backend == "ollama":
                 return self._call_ollama(prompt)
             elif backend == "gemini":
-                return self._call_gemini(prompt)
+                return self._call_gemini(prompt, api_key=api_key)
             elif backend == "hf_inference":
                 return self._call_hf_inference(prompt)
         except Exception as e:
@@ -87,12 +94,10 @@ class Summarizer:
         resp.raise_for_status()
         return resp.json().get("response", "").strip()
 
-    def _call_gemini(self, prompt: str) -> str:
-        from google import genai
-
-        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    def _call_gemini(self, prompt: str, api_key: str | None = None) -> str:
+        client = get_genai_client(api_key)
         response = client.models.generate_content(
-            model="gemini-2.0-flash", contents=prompt
+            model=GEMINI_MODEL, contents=prompt
         )
         return response.text.strip()
 
@@ -107,7 +112,13 @@ class Summarizer:
         )
         return response.strip()
 
-    def _map_reduce_summarize(self, text: str, language: str, progress_callback=None) -> str | None:
+    def _map_reduce_summarize(
+        self,
+        text: str,
+        language: str,
+        progress_callback=None,
+        api_key: str | None = None,
+    ) -> str | None:
         """Summarize long texts using map-reduce approach."""
         chunks = _chunk_text(text)
         chunk_summaries = []
@@ -119,7 +130,7 @@ class Summarizer:
                 progress_callback(frac, desc=f"Summarizing section {i+1}/{len(chunks)}...")
 
             prompt = CHUNK_SUMMARY_PROMPT.format(language=language, text=chunk)
-            result = self._call_llm(prompt)
+            result = self._call_llm(prompt, api_key=api_key)
             if result:
                 chunk_summaries.append(result)
             else:
@@ -131,15 +142,20 @@ class Summarizer:
             progress_callback(0.88, desc="Generating final summary...")
 
         prompt = SUMMARY_PROMPT.format(language=language, text=combined)
-        return self._call_llm(prompt)
+        return self._call_llm(prompt, api_key=api_key)
 
-    def summarize_streaming(self, text: str, language: str = "Catalan"):
+    def summarize_streaming(
+        self,
+        text: str,
+        language: str = "Catalan",
+        api_key: str | None = None,
+    ):
         """Generator version of summarize() that yields progress updates.
 
         Yields dicts: {desc, progress (optional), done: False} during processing,
         then {done: True, result: dict} when complete.
         """
-        backend = self._get_backend()
+        backend = self._get_backend(api_key=api_key)
         if backend == "none":
             logger.info("No LLM backend available, skipping summarization")
             yield {"done": True, "result": {
@@ -163,7 +179,7 @@ class Summarizer:
                     "done": False,
                 }
                 prompt = CHUNK_SUMMARY_PROMPT.format(language=language, text=chunk)
-                result = self._call_llm(prompt)
+                result = self._call_llm(prompt, api_key=api_key)
                 if result:
                     chunk_summaries.append(result)
 
@@ -174,11 +190,11 @@ class Summarizer:
             }
             combined = "\n\n".join(chunk_summaries)
             prompt = SUMMARY_PROMPT.format(language=language, text=combined)
-            raw_summary = self._call_llm(prompt)
+            raw_summary = self._call_llm(prompt, api_key=api_key)
         else:
             yield {"desc": "Generating summary...", "progress": 0.5, "done": False}
             prompt = SUMMARY_PROMPT.format(language=language, text=text)
-            raw_summary = self._call_llm(prompt)
+            raw_summary = self._call_llm(prompt, api_key=api_key)
 
         if not raw_summary:
             yield {"done": True, "result": {
@@ -196,7 +212,13 @@ class Summarizer:
             "sections": sections,
         }}
 
-    def summarize(self, text: str, language: str = "Catalan", progress_callback=None) -> dict:
+    def summarize(
+        self,
+        text: str,
+        language: str = "Catalan",
+        progress_callback=None,
+        api_key: str | None = None,
+    ) -> dict:
         """Generate a structured summary of the lecture transcript.
 
         Returns:
@@ -209,13 +231,18 @@ class Summarizer:
         word_count = len(text.split())
         raw_summary = None
 
-        if self._get_backend() == "none":
+        if self._get_backend(api_key=api_key) == "none":
             logger.info("No LLM backend available, skipping summarization")
         elif word_count > LLM_CHUNK_MAX_WORDS:
-            raw_summary = self._map_reduce_summarize(text, language, progress_callback)
+            raw_summary = self._map_reduce_summarize(
+                text,
+                language,
+                progress_callback,
+                api_key=api_key,
+            )
         else:
             prompt = SUMMARY_PROMPT.format(language=language, text=text)
-            raw_summary = self._call_llm(prompt)
+            raw_summary = self._call_llm(prompt, api_key=api_key)
 
         if not raw_summary:
             return {

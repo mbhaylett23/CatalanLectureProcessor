@@ -1,15 +1,15 @@
 # ProjectPulse - Catalan Lecture Processor
 
-- **Status**: Fixed critical NLLB translation hallucination bug in both Colab notebook and desktop code
-- **Last worked on**: Upgraded Colab notebook to NLLB-200 3.3B model with anti-hallucination parameters (no_repeat_ngram_size=3, num_beams=5), post-processing safety net, translation quality check, and Whisper GPU unload. Fixed core/translator.py with same params. Created COLAB_TROUBLESHOOTING.md for student support.
+- **Status**: Gemini-first translation and Firebase-capable auth/signup are implemented; live end-to-end verification against real credentials is the main remaining step.
+- **Last worked on**: Added Gemini translation/key plumbing, Firebase-capable auth, signup route, admin CLI updates, manual validation scripts, and a fresh `CLAUDE_HANDOFF.md`.
 - **Next steps**:
-  - Have student re-test with updated notebook to confirm hallucination fix
-  - Test that 3.3B model fits in T4 VRAM with Whisper unload flow
-  - Regenerate COLAB_TROUBLESHOOTING.pdf from updated markdown
-- **Blockers**: Awaiting student re-test to confirm fix
+  - Verify `/signup`, Gradio login, UID-based output folders, and `manage_users.py` with real Firebase credentials
+  - Verify Gemini translation in the UI with a real API key and confirm NLLB fallback when the key is absent
+  - Fix any runtime or UX issues Claude finds during live-service testing
+- **Blockers**: Full verification requires `FIREBASE_WEB_API_KEY`, Firebase admin credentials, and a real Gemini key; `pytest` is not installed in the conda env.
 - **Key files**:
-  - `colab/lecture_processor.ipynb` - Main Colab notebook (Cells 4, 7, 10 updated)
-  - `core/translator.py` - Desktop translation module (anti-hallucination added)
-  - `COLAB_TROUBLESHOOTING.md` - Student-facing troubleshooting guide
-  - `core/config.py` - Central configuration
-  - `ui/app.py` - Gradio UI (desktop version)
+  - `CLAUDE_HANDOFF.md`
+  - `core/translator.py`
+  - `core/auth.py`
+  - `run_desktop.py`
+  - `ui/app.py`

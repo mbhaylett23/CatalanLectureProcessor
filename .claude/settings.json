@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:/Users/Michael/.conda/envs/personal-assistant/python.exe\" \"g:/My Drive/PythonCode/TranslationProject/md_to_pdf.py\" COLAB_TROUBLESHOOTING.md)"
+    ]
+  }
+}

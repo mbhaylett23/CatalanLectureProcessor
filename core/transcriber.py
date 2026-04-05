@@ -5,12 +5,10 @@ import time
 import logging
 
 from core.config import (
-    WHISPER_HF_MODEL,
     WHISPER_FASTER_MODEL,
     WHISPER_FASTER_FALLBACK,
     WHISPER_BATCH_SIZE,
     WHISPER_BEAM_SIZE,
-    WHISPER_CHUNK_LENGTH_S,
     WHISPER_VAD_PARAMS,
     SUPPORTED_AUDIO_FORMATS,
 )
@@ -34,7 +32,6 @@ class Transcriber:
         self.device = self._resolve_device(device)
         self.model_id = model_id
         self._model = None
-        self._pipe = None
 
     def _resolve_device(self, device: str) -> str:
         if device != "auto":
@@ -46,31 +43,24 @@ class Transcriber:
             return "cpu"
 
     def _load_gpu_model(self):
-        """Load transformers pipeline with float16 on CUDA."""
-        import torch
-        from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+        """Load faster-whisper model with float16 on CUDA (with VAD support)."""
+        from faster_whisper import WhisperModel
 
-        model_id = self.model_id or WHISPER_HF_MODEL
-        logger.info("Loading GPU model: %s", model_id)
+        model_id = self.model_id or WHISPER_FASTER_MODEL
+        logger.info("Loading GPU model (faster-whisper): %s", model_id)
 
-        processor = AutoProcessor.from_pretrained(model_id)
-        model = AutoModelForSpeechSeq2Seq.from_pretrained(
-            model_id,
-            torch_dtype=torch.float16,
-            low_cpu_mem_usage=True,
-        ).to("cuda:0")
-
-        self._pipe = pipeline(
-            "automatic-speech-recognition",
-            model=model,
-            tokenizer=processor.tokenizer,
-            feature_extractor=processor.feature_extractor,
-            torch_dtype=torch.float16,
-            device="cuda:0",
-            chunk_length_s=WHISPER_CHUNK_LENGTH_S,
-            batch_size=WHISPER_BATCH_SIZE,
-            return_timestamps=True,
-        )
+        try:
+            self._model = WhisperModel(
+                model_id, device="cuda", compute_type="float16"
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to load %s (%s), falling back to %s",
+                model_id, e, WHISPER_FASTER_FALLBACK,
+            )
+            self._model = WhisperModel(
+                WHISPER_FASTER_FALLBACK, device="cuda", compute_type="float16"
+            )
         logger.info("GPU model loaded successfully")
 
     def _load_cpu_model(self):
@@ -96,10 +86,11 @@ class Transcriber:
 
     def _ensure_loaded(self):
         """Lazy-load the model on first use."""
-        if self.device == "cuda" and self._pipe is None:
-            self._load_gpu_model()
-        elif self.device == "cpu" and self._model is None:
-            self._load_cpu_model()
+        if self._model is None:
+            if self.device == "cuda":
+                self._load_gpu_model()
+            else:
+                self._load_cpu_model()
 
     def transcribe(self, audio_path: str, progress_callback=None) -> dict:
         """Transcribe an audio file.
@@ -146,28 +137,40 @@ class Transcriber:
         return result
 
     def _transcribe_gpu(self, audio_path: str, progress_callback=None) -> dict:
-        """Transcribe using transformers pipeline on GPU."""
-        output = self._pipe(
+        """Transcribe using faster-whisper on GPU with VAD filtering."""
+        from faster_whisper import BatchedInferencePipeline
+
+        batched = BatchedInferencePipeline(model=self._model)
+        segments_iter, info = batched.transcribe(
             audio_path,
-            generate_kwargs={"language": "ca", "task": "transcribe"},
+            language="ca",
+            batch_size=WHISPER_BATCH_SIZE,
+            beam_size=WHISPER_BEAM_SIZE,
+            vad_filter=True,
+            vad_parameters=WHISPER_VAD_PARAMS,
         )
 
-        # Build segments from chunks
         segments = []
-        if "chunks" in output:
-            for chunk in output["chunks"]:
-                ts = chunk.get("timestamp", (None, None))
-                segments.append({
-                    "start": ts[0] if ts[0] is not None else 0.0,
-                    "end": ts[1] if ts[1] is not None else 0.0,
-                    "text": chunk["text"].strip(),
-                })
+        full_text_parts = []
+        total_duration = info.duration if info.duration else 1.0
+
+        for seg in segments_iter:
+            segments.append({
+                "start": seg.start,
+                "end": seg.end,
+                "text": seg.text.strip(),
+            })
+            full_text_parts.append(seg.text.strip())
+
+            if progress_callback:
+                frac = min(seg.end / total_duration, 0.50)
+                progress_callback(0.10 + frac, desc=f"{seg.end:.0f}s / {total_duration:.0f}s")
 
         if progress_callback:
             progress_callback(0.50, desc="Transcription complete")
 
         return {
-            "text": output["text"].strip(),
+            "text": " ".join(full_text_parts),
             "segments": segments,
             "language": "ca",
         }
@@ -236,7 +239,6 @@ class Transcriber:
     def unload(self):
         """Free model memory."""
         self._model = None
-        self._pipe = None
         try:
             import torch
             if torch.cuda.is_available():
