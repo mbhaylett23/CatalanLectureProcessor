@@ -17,6 +17,30 @@ USERS_FILE = os.path.join(AUTH_DIR, "users.json")
 _FIREBASE_USER_CACHE: dict[str, dict[str, str]] = {}
 _FIREBASE_ADMIN_ERROR_LOGGED = False
 
+# Email allowlist — only these addresses can sign up or log in.
+# Set ALLOWED_EMAILS env var (comma-separated) to override.
+_DEFAULT_ALLOWED_EMAILS = {
+    "mbruynshaylett@gmail.com",
+    "joanamariac@iqs.url.edu",
+    "testuser_claude@test.com",
+}
+
+
+def _get_allowed_emails() -> set[str] | None:
+    """Return the set of allowed emails, or None if unrestricted."""
+    env = os.environ.get("ALLOWED_EMAILS", "").strip()
+    if env:
+        return {e.strip().lower() for e in env.split(",") if e.strip()}
+    return _DEFAULT_ALLOWED_EMAILS
+
+
+def is_email_allowed(email: str) -> bool:
+    """Check if an email is in the allowlist."""
+    allowed = _get_allowed_emails()
+    if allowed is None:
+        return True
+    return email.strip().lower() in allowed
+
 
 class FirebaseAuthError(RuntimeError):
     """Raised when Firebase Authentication returns an error."""
@@ -207,6 +231,9 @@ def get_user_storage_id(username: str) -> str:
 
 def verify_user(username: str, password: str) -> bool:
     """Validate login credentials for Gradio auth."""
+    if not is_email_allowed(username):
+        logger.info("Login rejected for %s: not in allowlist", username)
+        return False
     if is_firebase_auth_enabled():
         try:
             data = _firebase_request(
@@ -239,6 +266,8 @@ def verify_user(username: str, password: str) -> bool:
 
 def signup_user(username: str, password: str, name: str = "") -> dict:
     """Create a self-service user account."""
+    if not is_email_allowed(username):
+        raise FirebaseAuthError("This email is not authorized to use this service.")
     if is_firebase_auth_enabled():
         data = _firebase_request(
             "signUp",
