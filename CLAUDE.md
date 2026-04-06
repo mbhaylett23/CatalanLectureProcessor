@@ -30,26 +30,42 @@ Append below the marker line (`<!-- New ideas go below this line -->`), newest f
 
 ## Conversation Memory (pulse_memory)
 
-This workspace uses pulse_memory for persistent conversation history across Claude Code sessions.
+pulse_memory provides persistent memory across Claude Code sessions.
 Shared DB: all workspaces write to the same SQLite DB with daily auto-backups.
 
-### At the START of each conversation
-Check recent context for this workspace:
+### At the START of each conversation (MANDATORY)
+Run this FIRST before doing anything else:
 ```
-python "G:/My Drive/PythonCode/ProjectPulse/pulse_memory/recall.py" --recent --workspace TranslationProject --limit 5
+python "G:/My Drive/PythonCode/ProjectPulse/pulse_memory/run.py" startup --workspace TranslationProject
 ```
-Or search across ALL workspaces:
+This loads recent sessions, curated memory, available skills, wiki stats, and knowledge counts.
+
+To search for specific past topics:
 ```
-python "G:/My Drive/PythonCode/ProjectPulse/pulse_memory/recall.py" "search terms"
+python "G:/My Drive/PythonCode/ProjectPulse/pulse_memory/run.py" recall "search terms"
 ```
 
-### At the END of each conversation
+### At the END of each conversation (MANDATORY)
 Save a summary with key messages:
 ```
-python "G:/My Drive/PythonCode/ProjectPulse/pulse_memory/save_session.py" --workspace TranslationProject --summary "2-3 sentence summary" --messages "user: what was asked|assistant: what was done"
+python "G:/My Drive/PythonCode/ProjectPulse/pulse_memory/run.py" save_session --workspace TranslationProject --summary "2-3 sentence summary" --messages "user: what was asked|assistant: what was done"
 ```
-Tips for good messages:
-- Include specific file names, function names, error messages, feature names
-- These are what FTS5 search will match on in future sessions
-- More detail = better recall later
+Include specific file names, function names, error messages in messages for FTS5 search.
+
+### Wiki (knowledge pages)
+The wiki is an LLM-maintained knowledge base at `G:/My Drive/PythonCode/ProjectPulse/pulse_memory/wiki/`. It contains topic and entity pages that compound over time.
+- Search wiki: `from pulse_memory import Wiki; w = Wiki(); w.search("query")`
+- Ingest finding: `w.ingest("finding text", tags=["tag1"], source="attribution")`
+- After complex research sessions, ingest key findings into the wiki
+
+### Skills (reusable procedures)
+Skills are at `G:/My Drive/PythonCode/ProjectPulse/pulse_memory/skills/`. View available skills before starting complex tasks:
+```python
+from pulse_memory import SkillStore
+skills = SkillStore()
+skills.list_skills()           # see all skills
+skills.view_skill("name")     # read full procedure
+```
+After completing a complex task (5+ steps), create a skill so future sessions can reuse it.
+
 

@@ -63,17 +63,21 @@ Transcription:
 {text}"""
 
 SUMMARY_PROMPT = """You are an academic assistant. Summarize the following university lecture \
-transcript. The lecture is in {language}. Provide your summary in {language}.
+transcript. The lecture is in {language}. Provide your summary entirely in {language}, \
+including all section headers.
 
 Format your response as:
-## Main Topics
+## [Main Topics - translated to {language}]
 - [bullet points of 5-10 key topics covered]
 
-## Detailed Summary
+## [Detailed Summary - translated to {language}]
 [2-3 paragraphs summarizing the lecture content]
 
-## Key Terms
+## [Key Terms - translated to {language}]
 - [list of important technical terms or concepts mentioned]
+
+Important: The section headers MUST be written in {language}, not English. \
+For example, in Spanish use "Temas Principales", "Resumen Detallado", "Términos Clave".
 
 Transcript:
 {text}"""

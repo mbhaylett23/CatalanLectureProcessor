@@ -1,6 +1,7 @@
 """Gradio web interface for the Catalan Lecture Processor."""
 
 import os
+import re
 import gradio as gr
 
 from core.config import TARGET_LANGUAGES
@@ -82,6 +83,7 @@ def create_app(mode: str = "auto") -> gr.Blocks:
                         type="filepath",
                         sources=["upload"],
                     )
+                    upload_status = gr.Markdown(visible=False)
                     target_langs = gr.CheckboxGroup(
                         choices=TARGET_LANGUAGES,
                         value=["Spanish", "English"],
@@ -91,10 +93,22 @@ def create_app(mode: str = "auto") -> gr.Blocks:
                         label="Optional Gemini API key",
                         type="password",
                         placeholder="Used for this run only. Falls back to NLLB if blank or unavailable.",
+                        visible=False,
                     )
                     process_btn = gr.Button(
                         "Process Lecture", variant="primary", size="lg"
                     )
+
+                    def on_audio_change(audio):
+                        if audio:
+                            name = os.path.basename(audio)
+                            return gr.update(
+                                value=f"**File loaded:** {name} — ready to process.",
+                                visible=True,
+                            )
+                        return gr.update(value="", visible=False)
+
+                    audio_input.change(on_audio_change, inputs=[audio_input], outputs=[upload_status])
 
                 # -- Status --
                 status_text = gr.Textbox(
@@ -197,6 +211,16 @@ def create_app(mode: str = "auto") -> gr.Blocks:
             username = _get_username(request)
             processor = get_processor()
 
+            # Check if this audio was already processed today
+            audio_base = os.path.splitext(os.path.basename(audio))[0]
+            safe_name = re.sub(r"[^\w\-]", "_", audio_base).strip("_")
+            from datetime import datetime
+            folder_name = f"{datetime.now().strftime('%Y-%m-%d')}_{safe_name}"
+            user_dir = os.path.join(OUTPUT_DIR, username) if username else OUTPUT_DIR
+            existing = os.path.join(user_dir, folder_name)
+            if os.path.isdir(existing):
+                gr.Warning("This audio was already processed today. Reprocessing will overwrite the previous results.")
+
             def build_output(status, results):
                 """Build the full output tuple from pipeline results."""
                 raw = results.get("transcript_raw") or ""
@@ -256,25 +280,52 @@ def create_app(mode: str = "auto") -> gr.Blocks:
 
         def select_lecture(evt: gr.SelectData, table_data, request: gr.Request):
             """When user clicks a row, load files for download."""
-            if table_data is None or len(table_data) == 0:
-                return "", None
-            row = table_data[evt.index[0]]
-            folder_id = row[3]
-            username = _get_username(request)
-            user_dir = os.path.join(OUTPUT_DIR, username) if username else OUTPUT_DIR
-            folder_path = os.path.join(user_dir, folder_id)
+            try:
+                if table_data is None:
+                    return "", None
 
-            if not os.path.isdir(folder_path):
-                return f"Folder not found: {folder_id}", None
+                # Gradio 6 passes table_data as dict with "headers" and "data"
+                if isinstance(table_data, dict):
+                    rows = table_data.get("data", [])
+                elif hasattr(table_data, 'values'):
+                    # pandas DataFrame
+                    rows = table_data.values.tolist()
+                else:
+                    rows = list(table_data)
 
-            files = []
-            for f in sorted(os.listdir(folder_path)):
-                if f.startswith(".") or f == "desktop.ini":
-                    continue
-                files.append(os.path.join(folder_path, f))
+                if not rows:
+                    return "", None
 
-            label = f"{row[0]} — {row[1]}"
-            return label, files if files else None
+                # evt.index is [row, col] in Gradio 6
+                row_idx = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
+                row = rows[row_idx]
+
+                import logging
+                logging.info("select_lecture debug: evt.index=%s, type(table_data)=%s, type(row)=%s, row=%s",
+                             evt.index, type(table_data).__name__, type(row).__name__, row)
+
+                # row might be a dict or a list
+                if isinstance(row, dict):
+                    folder_id = row.get("folder_id", "")
+                else:
+                    folder_id = row[3] if len(row) > 3 else str(row[-1])
+                username = _get_username(request)
+                user_dir = os.path.join(OUTPUT_DIR, username) if username else OUTPUT_DIR
+                folder_path = os.path.join(user_dir, folder_id)
+
+                if not os.path.isdir(folder_path):
+                    return f"Folder not found: {folder_id}", None
+
+                files = []
+                for f in sorted(os.listdir(folder_path)):
+                    if f.startswith(".") or f == "desktop.ini":
+                        continue
+                    files.append(os.path.join(folder_path, f))
+
+                label = f"{row[0]} — {row[1]}"
+                return label, files if files else None
+            except Exception as e:
+                return f"Error: {e}", None
 
         refresh_btn.click(load_history, inputs=[], outputs=[history_table])
         app.load(load_history, inputs=[], outputs=[history_table])

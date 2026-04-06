@@ -206,9 +206,9 @@ class Summarizer:
         sections = self._parse_summary_sections(raw_summary)
         yield {"done": True, "result": {
             "raw_summary": raw_summary,
-            "main_topics": self._extract_list_items(raw_summary, "Main Topics"),
-            "detailed_summary": self._extract_section_text(raw_summary, "Detailed Summary"),
-            "key_terms": self._extract_list_items(raw_summary, "Key Terms"),
+            "main_topics": self._extract_section_by_position(raw_summary, 0, "list"),
+            "detailed_summary": self._extract_section_by_position(raw_summary, 1, "text"),
+            "key_terms": self._extract_section_by_position(raw_summary, 2, "list"),
             "sections": sections,
         }}
 
@@ -260,9 +260,9 @@ class Summarizer:
 
         return {
             "raw_summary": raw_summary,
-            "main_topics": self._extract_list_items(raw_summary, "Main Topics"),
-            "detailed_summary": self._extract_section_text(raw_summary, "Detailed Summary"),
-            "key_terms": self._extract_list_items(raw_summary, "Key Terms"),
+            "main_topics": self._extract_section_by_position(raw_summary, 0, "list"),
+            "detailed_summary": self._extract_section_by_position(raw_summary, 1, "text"),
+            "key_terms": self._extract_section_by_position(raw_summary, 2, "list"),
             "sections": sections,
         }
 
@@ -290,6 +290,40 @@ class Summarizer:
             sections.append({"title": current_title, "bullets": current_bullets})
 
         return sections
+
+    def _extract_section_by_position(self, text: str, position: int, mode: str = "list"):
+        """Extract content from the Nth ## section (0-indexed).
+
+        mode="list" returns bullet items as a list of strings.
+        mode="text" returns paragraph text as a single string.
+        """
+        sections_content = []
+        current_lines = []
+        in_section = False
+
+        for line in text.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith("## "):
+                if in_section:
+                    sections_content.append(current_lines)
+                    current_lines = []
+                in_section = True
+                continue
+            if in_section:
+                current_lines.append(stripped)
+
+        if in_section:
+            sections_content.append(current_lines)
+
+        if position >= len(sections_content):
+            return [] if mode == "list" else ""
+
+        lines = sections_content[position]
+        if mode == "list":
+            return [l[2:].strip() for l in lines
+                    if l.startswith("- ") or l.startswith("* ")]
+        else:
+            return "\n\n".join(l for l in lines if l)
 
     def _extract_list_items(self, text: str, section_header: str) -> list[str]:
         """Extract bullet points from a specific markdown section."""

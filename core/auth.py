@@ -81,10 +81,7 @@ def get_auth_backend_name() -> str:
 def get_login_message() -> str | None:
     """Optional HTML shown on the Gradio login screen."""
     if is_firebase_auth_enabled():
-        return (
-            "Need an account? "
-            "<a href=\"/signup\">Create one</a> before logging in."
-        )
+        return "Need an account? Click the button below."
     return None
 
 
