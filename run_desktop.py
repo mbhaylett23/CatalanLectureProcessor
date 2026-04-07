@@ -258,22 +258,58 @@ def _register_login_and_signup_routes(server_app):
         from starlette.responses import Response
         return Response(content="""
 (function addSignupButton(){
-    // Only inject on the login page, not inside the app
-    function isLoginPage(){
-        return document.querySelector('input[type=password]') &&
-               !document.querySelector('.gradio-container .app');
+    var attempts = 0;
+
+    // Recursive querySelector that pierces shadow DOM
+    function deepQuery(root, selector){
+        var el = root.querySelector ? root.querySelector(selector) : null;
+        if(el) return el;
+        var all = root.querySelectorAll ? root.querySelectorAll('*') : [];
+        for(var i = 0; i < all.length; i++){
+            if(all[i].shadowRoot){
+                var found = deepQuery(all[i].shadowRoot, selector);
+                if(found) return found;
+            }
+        }
+        return null;
     }
+
     function tryInject(){
-        if(!isLoginPage()) return;
-        var btn=document.querySelector('button.lg')||document.querySelector('form button');
-        if(!btn){setTimeout(tryInject,200);return;}
-        if(document.getElementById('signup-btn'))return;
-        var a=document.createElement('a');
-        a.id='signup-btn';a.href='/signup';a.textContent='Create Account';
-        a.style.cssText='display:block;text-align:center;margin-top:12px;padding:12px;background:#4f46e5;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;';
-        btn.parentNode.insertBefore(a,btn.nextSibling);
+        attempts++;
+        if(attempts > 150) { console.log('signup-btn: gave up after 30s'); return; }
+
+        // Find password input anywhere (including shadow DOM)
+        var pw = deepQuery(document, 'input[type=password]');
+        if(!pw){ setTimeout(tryInject, 200); return; }
+        if(pw.parentNode.querySelector && pw.parentNode.parentNode.querySelector('#signup-btn')) return;
+
+        // Find the Login button — search up from the password input
+        var container = pw.closest('form');
+        if(!container){
+            // Walk up looking for a parent that contains a button
+            var node = pw.parentNode;
+            for(var i = 0; i < 10 && node; i++){
+                if(node.querySelector && node.querySelector('button')){ container = node; break; }
+                node = node.parentNode;
+            }
+        }
+        if(!container){ setTimeout(tryInject, 200); return; }
+
+        var btn = container.querySelector('button');
+        if(!btn){ setTimeout(tryInject, 200); return; }
+
+        // Don't add twice
+        if(container.querySelector('#signup-btn')) return;
+
+        var a = document.createElement('a');
+        a.id = 'signup-btn';
+        a.href = '/signup';
+        a.textContent = 'Create Account';
+        a.style.cssText = 'display:block;text-align:center;margin-top:12px;padding:12px;background:#4f46e5;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;';
+        btn.parentNode.insertBefore(a, btn.nextSibling);
+        console.log('signup-btn: added after', attempts, 'attempts');
     }
-    setTimeout(tryInject,800);
+    setTimeout(tryInject, 300);
 })();
 """, media_type="application/javascript")
 
@@ -282,6 +318,7 @@ def _register_login_and_signup_routes(server_app):
 
     _orig_asgi = server_app.build_middleware_stack
     _ghost_loader = b"""<style>
+html, body { background: #0b0f19 !important; }
 #ghost-loader{position:fixed;top:0;left:0;width:100%;height:100%;background:#0b0f19;z-index:9999;display:flex;justify-content:center;align-items:center;}
 #ghost-loader .card{width:min(400px,90%);background:#1a1e2e;border-radius:18px;padding:32px;animation:pulse 1.5s ease-in-out infinite;}
 #ghost-loader .line{height:14px;background:#2a2e3e;border-radius:7px;margin-bottom:16px;}
@@ -304,13 +341,30 @@ def _register_login_and_signup_routes(server_app):
 </div>
 <script>
 (function hideGhost(){
-    function check(){
-        if(document.querySelector('button.lg')||document.querySelector('form button')||document.querySelector('.gradio-container')||document.querySelector('gradio-app')){
-            var g=document.getElementById('ghost-loader');
-            if(g)g.remove();
-        }else{setTimeout(check,100);}
+    function deepFind(root, sel){
+        var el = root.querySelector ? root.querySelector(sel) : null;
+        if(el) return el;
+        var all = root.querySelectorAll ? root.querySelectorAll('*') : [];
+        for(var i = 0; i < all.length; i++){
+            if(all[i].shadowRoot){
+                var f = deepFind(all[i].shadowRoot, sel);
+                if(f) return f;
+            }
+        }
+        return null;
     }
-    setTimeout(check,500);
+    var attempts = 0;
+    function check(){
+        attempts++;
+        if(attempts > 100){ var g=document.getElementById('ghost-loader'); if(g)g.remove(); return; }
+        if(deepFind(document, 'input[type=password]') || deepFind(document, '.gradio-container')){
+            var g = document.getElementById('ghost-loader');
+            if(g) g.remove();
+        } else {
+            setTimeout(check, 100);
+        }
+    }
+    setTimeout(check, 300);
 })();
 </script>"""
     _script_tag = b'<script src="/signup-btn.js"></script>' + _ghost_loader + b'</body>'

@@ -22,7 +22,6 @@ _FIREBASE_ADMIN_ERROR_LOGGED = False
 _DEFAULT_ALLOWED_EMAILS = {
     "mbruynshaylett@gmail.com",
     "joanamariac@iqs.url.edu",
-    "testuser_claude@test.com",
 }
 
 
